@@ -1,0 +1,56 @@
+name: Deploy to GitHub Pages
+
+permissions:
+  contents: write # 允许 GitHub Actions 写入仓库，其中包括创建分支、提交代码等
+
+on:
+  workflow_dispatch:  # 允许手动触发
+  push:
+    branches:
+      - main  # 监听 main 分支
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # region: 前端项目构建前置步骤：检出代码、依赖安装、构建（pnpm、nodejs）
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9 # pnpm 版本，一些pnpm项目带有lockfile的时候，需要版本的匹配，否则可能会报错（pnpm版本不匹配时，会忽略锁文件）
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20 # Node.js 版本
+          # node-version-file: ".nvmrc" # 从 .nvmrc 文件中读取 Node.js 版本，与 node-version 二选一
+          cache: pnpm # 缓存 pnpm
+      # endregion
+
+      # region: 前端项目构建，根据具体项目情况修改，此处以 <https://github.com/uni-ku/bundle-optimizer> 为例
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build Library
+        run: pnpm run build
+
+      - name: Build Project
+        run: pnpm run example:build:h5
+      # endregion
+
+      # region: 部署到 GitHub Pages，此处采用 peaceiris/actions-gh-pages@v4
+      # 该插件可以基于之前的构建流程，通过配置 publish_dir 来指定将要发布的目录
+      # 之后会将 publish_dir 目录下的文件推送到 gh-pages 分支，当然分支名称也是可以配置的
+      # 最后需要在 GitHub 仓库的 Settings -> Pages 中设置 gh-pages 分支作为 GitHub Pages 的源
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./examples/dist/build/h5 # 构建输出目录
+          publish_branch: gh-pages # 发布分支，可选，默认为 gh-pages
+      # endregion

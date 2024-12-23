@@ -1,0 +1,42 @@
+# 本工作流用于演示如何使用 GitHub Actions 对仓库内容做出更改，并提交commit
+# 此处以定时更新赞助商列表为例，每天 00:00 UTC 时间执行
+
+name: sponsors
+
+permissions:
+  contents: write
+
+on:
+  workflow_dispatch:  # 允许手动触发
+  schedule:
+    - cron: "0 0 * * *" # 每天 00:00 UTC 时间执行
+
+jobs:
+  update-sponsors:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+      - run: pnpm install
+      - run: pnpm run build
+        env:  # 传递环境变量
+          # 以下环境变量需要在仓库的 Settings -> Secrets 中配置
+          # 其中的 token 是得先在 GitHub 个人账号设置的 Developer settings -> Personal access tokens 中生成，作为上面 secret 的值
+          SPONSORKIT_GITHUB_TOKEN: ${{ secrets.SPONSORKIT_GITHUB_TOKEN }}
+          SPONSORKIT_GITHUB_LOGIN: ${{ secrets.SPONSORKIT_GITHUB_LOGIN }}
+      
+      # region: 基于以上的构建结果，更新项目内容并提交 commit
+      - uses: EndBug/add-and-commit@v9
+        with:
+          message: "chore: update sponsors" # commit message
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub Token，此 token 是 actions 上下文中默认存在的，无需额外配置
+      - run: pnpm run purge # 其他操作
+      # endregion

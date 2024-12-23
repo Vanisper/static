@@ -1,0 +1,134 @@
+# 此 Release 工作流用于生成发版说明
+# 监听以 v 开头的 tag，提取并分类提交消息，生成发版说明，写入到 changelog.md 文件中，最后引用 changelog.md 创建发版
+# ---
+# 比较有特点的是，本工作流兼容处理了带有 ` 字符的 commit-msg
+# 因为 github-action 的大多数操作是在 shell 中进行的，shell 环境中 ` 是特殊字符（字符串会被识别成命令执行），需要转义处理
+# 通过 sed 's/`/\\\`/g' 将 ` 转义为 \`
+# 可以看到有两个地方都有做这个处理，这是由于转义过后的字符串在“传递”过程中，会逐层还原，所以需要多次转义
+# ---
+# 使用本工作流 commit-msg 就得遵循 Conventional Commits 规范 <https://www.conventionalcommits.org/zh-hans/v1.0.0/>
+
+name: Release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - 'v*'  # 监听以 v 开头的 tag
+
+jobs:
+  build:
+    name: 构建并发版
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 获取当前和上一个标签
+        id: get_tags
+        run: |
+          git fetch --prune --unshallow
+          tags=($(git tag -l --sort=-version:refname))
+          current_tag=${tags[0]}
+          previous_tag=${tags[1]}
+          echo "previous_tag=$previous_tag" >> $GITHUB_OUTPUT
+          echo "current_tag=$current_tag" >> $GITHUB_OUTPUT
+
+      - name: 提取并分类提交消息
+        id: extract_commit_messages
+        run: |
+          set -e
+          current_tag="${{ steps.get_tags.outputs.current_tag }}"
+          previous_tag="${{ steps.get_tags.outputs.previous_tag }}"
+          if [ -z "$previous_tag" ]; then
+            commit_messages=$(git log --pretty=format:"%s - by @%an (%h)" "$current_tag" | grep -E 'feat|fix|docs|perf' || true)
+          else
+            commit_messages=$(git log --pretty=format:"%s - by @%an (%h)" "$previous_tag".."$current_tag" | grep -E 'feat|fix|docs|perf' || true)
+          fi
+
+          # 转义 ` 字符
+          commit_messages=$(echo "$commit_messages" | sed 's/`/\\\`/g')
+
+          {
+            echo 'feat_messages<<EOF'
+            echo "$commit_messages" | grep 'feat' || true
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+          {
+            echo 'fix_messages<<EOF'
+            echo "$commit_messages" | grep 'fix' || true
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+          {
+            echo 'docs_messages<<EOF'
+            echo "$commit_messages" | grep 'docs' || true
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+          {
+            echo 'perf_messages<<EOF'
+            echo "$commit_messages" | grep 'perf' || true
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+
+      - name: 获取当前分支名
+        id: get_branch_name
+        run: |
+          branch_name=$(git rev-parse --abbrev-ref HEAD)
+          echo "branch_name=$branch_name" >> $GITHUB_OUTPUT
+
+      - name: 发版详情
+        id: generate_release_notes
+        run: |
+          # 提取提交消息分类
+          feat_messages=("${{ steps.extract_commit_messages.outputs.feat_messages }}")
+          fix_messages=("${{ steps.extract_commit_messages.outputs.fix_messages }}")
+          docs_messages=("${{ steps.extract_commit_messages.outputs.docs_messages }}")
+          perf_messages=("${{ steps.extract_commit_messages.outputs.perf_messages }}")
+
+          release_notes=""
+
+          if [[ -n "$feat_messages" ]]; then
+            release_notes="$release_notes\n### 🚀 Features 新功能:  \n"
+            while IFS= read -r message; do
+              release_notes="$release_notes\n- $message"
+            done <<< "$feat_messages"
+          fi
+
+          if [[ -n "$fix_messages" ]]; then
+            release_notes="$release_notes\n### 🩹 Fixes 缺陷修复:  \n"
+            while IFS= read -r message; do
+              release_notes="$release_notes\n- $message"
+            done <<< "$fix_messages"
+          fi
+
+          if [[ -n "$docs_messages" ]]; then
+            release_notes="$release_notes\n### 📖 Documentation 文档:  \n"
+            while IFS= read -r message; do
+              release_notes="$release_notes\n- $message"
+            done <<< "$docs_messages"
+          fi
+
+          if [[ -n "$perf_messages" ]]; then
+            release_notes="$release_notes\n### 🔥 Performance 性能优化:  \n"
+            while IFS= read -r message; do
+              release_notes="$release_notes\n- $message"
+            done <<< "$perf_messages"
+          fi
+
+          # 转义 ` 字符
+          release_notes=$(echo "$release_notes" | sed 's/`/\\\`/g')
+          echo "release_notes=$release_notes" >> $GITHUB_OUTPUT
+
+      - name: 写入生成的发布说明到 changelog.md
+        run: |
+          echo -e "${{ steps.generate_release_notes.outputs.release_notes }}" > changelog.md
+          cat changelog.md
+
+      - name: 引用 changelog.md 创建发版
+        id: release_tag
+        uses: ncipollo/release-action@v1.14.0
+        with:
+          bodyFile: changelog.md
