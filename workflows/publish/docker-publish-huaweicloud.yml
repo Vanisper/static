@@ -1,0 +1,67 @@
+# 此 Publish 工作流用于构建和推送 Docker 镜像到华为云 SWR
+# 详见：<https://github.com/marketplace/actions/huawei-cloud-software-repository-for-container-swr-login>
+# 华为云 SWR 后台入口：<https://console.huaweicloud.com/swr>
+# ---
+# 需要在 GitHub 仓库的 Secrets 中设置以下变量:
+# - SWR_ACCESSKEY: 华为云 SWR Access Key ID
+# - SWR_SECRETACCESSKEY: 华为云 SWR Secret Access Key
+# ---
+# 需要在当前工作流文件中配置以下变量:
+# -- 华为云 SWR 变量 --
+# - REGION_ID: 华为云 SWR 区域 ID （详见华为云 SWR 后台配置）
+# - SWR_ORGANIZATION: SWR 组织名 （详见华为云 SWR 后台配置）
+# -- 通用变量 --
+# - DOCKERFILE_PATH: Dockerfile 文件路径（例如 ./docker/Dockerfile）
+# - DOCKER_CONTEXT: Dockerfile 上下文（例如 . 或 ./docker）
+# - DOCKER_IMAGE_NAME: Docker 镜像名称（不包含组织名称）
+# - DOCKER_IMAGE_TAG: Docker 镜像标签（例如 latest、v1.0 等）
+# ---
+
+name: Docker Build and Push - Huawei Cloud SWR
+
+on:
+  workflow_dispatch: # 手动触发事件
+  push:
+    branches:
+      - master  # 可以根据您的需要修改触发的分支
+
+env:
+  SWR_ACCESSKEY: ${{ secrets.SWR_ACCESSKEY }} # 华为云 SWR Access Key ID
+  SWR_SECRETACCESSKEY: ${{ secrets.SWR_SECRETACCESSKEY }} # 华为云 SWR Secret Access Key
+  REGION_ID: 'cn-south-1'   # TODO: 华为云 SWR 区域 ID （详见华为云 SWR 后台配置），example: cn-north-4
+  SWR_ORGANIZATION: <organization>   # TODO: SWR 组织名（详见华为云 SWR 后台配置）
+  DOCKERFILE_PATH: "./docker/Dockerfile" # TODO: Dockerfile 文件路径，工作流中以项目根目录为基准路径
+  DOCKER_CONTEXT: "." # TODO: Dockerfile 的上下文路径，与命令行执行时所处的目录有关，如使用上级目录作为上下文，则是 ".."
+  DOCKER_IMAGE_NAME: <image_name>   # TODO: 镜像名称
+  DOCKER_IMAGE_TAG: "latest" # 镜像标签，例如 latest、v1.0 等；但是考虑到拉取使用镜像时，消除标签的心智问题，默认使用 latest
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Log in to Huawei Cloud SWR
+        uses: huaweicloud/swr-login@v2.1.0
+        with:
+          access-key-id: ${{ env.SWR_ACCESSKEY }}
+          access-key-secret: ${{ env.SWR_SECRETACCESSKEY }}
+          region: ${{ env.REGION_ID }}
+      
+      - name: Build, Tag, and Push Image to Huawei Cloud SWR
+        id: push-image
+        env:
+          SWR_REGISTRY: swr.${{ env.REGION_ID }}.myhuaweicloud.com
+          SWR_ORGANIZATION: ${{ env.SWR_ORGANIZATION }}
+          IMAGE_NAME: ${{ env.DOCKER_IMAGE_NAME }}
+          # IMAGE_TAG: ${{ github.sha }} # 镜像版本,这里是使用代码commitid sha值， 用户可以修改成自己需要的。
+          IMAGE_TAG: ${{ env.DOCKER_IMAGE_TAG }}
+          FILE: ${{ env.DOCKERFILE_PATH }} # Dockerfile 文件路径
+          CONTEXT: ${{ env.DOCKER_CONTEXT }} # Dockerfile 上下文
+        run: |
+          docker build -t $SWR_REGISTRY/$SWR_ORGANIZATION/$IMAGE_NAME:$IMAGE_TAG -f $FILE $CONTEXT
+          docker push $SWR_REGISTRY/$SWR_ORGANIZATION/$IMAGE_NAME:$IMAGE_TAG
+          echo "::set-output name=image::$SWR_REGISTRY/$SWR_ORGANIZATION/$IMAGE_NAME:$IMAGE_TAG"
