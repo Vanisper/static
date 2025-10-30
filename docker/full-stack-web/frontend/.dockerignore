@@ -1,0 +1,42 @@
+# 依赖目录
+node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 运行时文件
+logs
+*.log
+.npm
+.yarn-integrity
+
+# 环境变量文件
+.env
+.env.local
+.env.*.local
+.env.production
+
+# 版本控制
+.git
+.gitignore
+
+# 构建输出
+dist
+build
+coverage
+
+# 配置文件
+.dockerignore
+Dockerfile
+.docker
+
+# 测试文件
+test
+tests
+__tests__
+*.test.js
+*.spec.js
+
+# 其他
+.DS_Store
+.thumbs

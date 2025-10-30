@@ -1,0 +1,56 @@
+version: '3.8'
+name: full-stack-web
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile_java
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mysql_5.7
+      - redis
+      - rabbitmq
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile_node
+    ports:
+      - "3000:3000"
+
+  mysql_5.7:
+    container_name: mysql_5.7
+    image: mysql:5.7
+    environment:
+      MYSQL_DATABASE: demo
+      MYSQL_USER: demo-admin
+      MYSQL_PASSWORD: 123456
+      MYSQL_ROOT_PASSWORD: 123456
+    ports:
+      - "3306:3306"
+
+  mysql_8.4:
+    container_name: mysql_8.4
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: demo
+      MYSQL_USER: demo-admin
+      MYSQL_PASSWORD: 123456
+      MYSQL_ROOT_PASSWORD: 123456
+    ports:
+      - "3306:3306"
+
+  redis:
+    container_name: redis
+    image: redis:latest
+    ports:
+      - "6379:6379"
+
+  rabbitmq:
+    container_name: rabbitmq_3-management
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"

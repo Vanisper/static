@@ -1,0 +1,20 @@
+# 构建产物
+FROM node:16 AS builder
+WORKDIR /app
+# 先复制包管理文件
+COPY package*.json ./
+# 安装依赖
+RUN npm ci
+# 复制应用程序代码（通过.dockerignore过滤不需要的文件）
+COPY . .
+RUN npm run build
+
+# 发布环境
+FROM node:16-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY --from=builder /app/dist ./dist
+EXPOSE 3000
+# TODO: 其他操作
+# CMD ["npm", "start"]
