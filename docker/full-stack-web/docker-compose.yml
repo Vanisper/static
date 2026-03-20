@@ -23,6 +23,9 @@ services:
   mysql_5.7:
     container_name: mysql_5.7
     image: mysql:5.7
+    platform: linux/amd64
+    # https://gist.github.com/feltnerm/bb6e23f531803896ca1e
+    command: ['mysqld', '--character-set-server=utf8mb4', '--collation-server=utf8mb4_unicode_ci', '--lower_case_table_names=1']
     environment:
       MYSQL_DATABASE: demo
       MYSQL_USER: demo-admin
